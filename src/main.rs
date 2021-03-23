@@ -1,6 +1,7 @@
 use crate::camera::{Camera, CameraProperties};
 use crate::hittable::HitRecord;
 use crate::hittable::Hittable;
+use crate::materials::dielectric::Dialectric;
 use crate::materials::lambertian::Lambertian;
 use crate::materials::material::Material;
 use crate::materials::metal::Metal;
@@ -28,7 +29,7 @@ fn main() {
     let image_width = 400;
     let image_height = (image_width as f32 / aspect_ratio) as u32;
     let mut img: RgbImage = ImageBuffer::new(image_width, image_height);
-    let samples_per_pixel = 25;
+    let samples_per_pixel = 50;
     let depth: i32 = 50;
 
     //World
@@ -48,14 +49,14 @@ fn main() {
         Box::new(center),
         Box::new(Lambertian {
             albedo: Color {
-                x: 0.7,
-                y: 0.3,
-                z: 0.3,
+                x: 0.1,
+                y: 0.2,
+                z: 0.5,
             },
         }),
     ));
 
-    let left = Sphere::new(
+    let left_a = Sphere::new(
         Point3 {
             x: -1.,
             y: 0.,
@@ -63,17 +64,17 @@ fn main() {
         },
         0.5,
     );
-    world.push((
-        Box::new(left),
-        Box::new(Metal {
-            albedo: Color {
-                x: 0.8,
-                y: 0.8,
-                z: 0.8,
-            },
-            fuzz: 0.3,
-        }),
-    ));
+
+    let left_b = Sphere::new(
+        Point3 {
+            x: -1.,
+            y: 0.,
+            z: -1.,
+        },
+        -0.45,
+    );
+    world.push((Box::new(left_a), Box::new(Dialectric { ir: 1.5 })));
+    world.push((Box::new(left_b), Box::new(Dialectric { ir: 1.5 })));
 
     let right = Sphere::new(
         Point3 {
@@ -92,7 +93,7 @@ fn main() {
                 y: 0.6,
                 z: 0.2,
             },
-            fuzz: 1.,
+            fuzz: 0.,
         }),
     ));
 
@@ -116,7 +117,25 @@ fn main() {
         }),
     ));
 
-    let camera: Camera = Camera::new(aspect_ratio, 2., 1.);
+    let camera: Camera = Camera::new(
+        Vec3 {
+            x: -2.,
+            y: 2.,
+            z: 1.,
+        },
+        Vec3 {
+            x: 0.,
+            y: 0.,
+            z: -1.,
+        },
+        Vec3 {
+            x: 0.,
+            y: 1.,
+            z: 0.,
+        },
+        20.,
+        aspect_ratio,
+    );
 
     println!("P3 {} {} {:?}", img.width(), img.height(), camera);
     let mut rng = rand::thread_rng();
@@ -149,7 +168,7 @@ fn main() {
             *pixel = image::Rgb([pixel_value.r, pixel_value.g, pixel_value.b]);
         }
     }
-    let subimg = imageops::rotate180(&mut img);
+    let subimg = imageops::flip_horizontal(&imageops::rotate180(&mut img));
     subimg.save("render.png").unwrap();
 }
 
