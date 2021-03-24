@@ -25,8 +25,8 @@ mod vec3;
 
 fn main() {
     //Image
-    let aspect_ratio = 16.0 / 9.0;
-    let image_width = 400;
+    let aspect_ratio = 3.0 / 2.0;
+    let image_width = 1200;
     let image_height = (image_width as f32 / aspect_ratio) as u32;
     let mut img: RgbImage = ImageBuffer::new(image_width, image_height);
     let samples_per_pixel = 50;
@@ -36,98 +36,137 @@ fn main() {
     let mut world: Vec<(Box<dyn Hittable>, Box<dyn Material>)> =
         Vec::<(Box<dyn Hittable>, Box<dyn Material>)>::new();
 
-    let center = Sphere::new(
-        Point3 {
-            x: 0.,
-            y: 0.,
-            z: -1.,
-        },
-        0.5,
-    );
-
-    world.push((
-        Box::new(center),
-        Box::new(Lambertian {
-            albedo: Color {
-                x: 0.1,
-                y: 0.2,
-                z: 0.5,
-            },
-        }),
-    ));
-
-    let left_a = Sphere::new(
-        Point3 {
-            x: -1.,
-            y: 0.,
-            z: -1.,
-        },
-        0.5,
-    );
-
-    let left_b = Sphere::new(
-        Point3 {
-            x: -1.,
-            y: 0.,
-            z: -1.,
-        },
-        -0.45,
-    );
-    world.push((Box::new(left_a), Box::new(Dialectric { ir: 1.5 })));
-    world.push((Box::new(left_b), Box::new(Dialectric { ir: 1.5 })));
-
-    let right = Sphere::new(
-        Point3 {
-            x: 1.,
-            y: 0.,
-            z: -1.,
-        },
-        0.5,
-    );
-
-    world.push((
-        Box::new(right),
-        Box::new(Metal {
-            albedo: Color {
-                x: 0.8,
-                y: 0.6,
-                z: 0.2,
-            },
-            fuzz: 0.,
-        }),
-    ));
-
     let ground = Sphere::new(
         Point3 {
             x: 0.,
-            y: -100.5,
-            z: 1.,
+            y: -1000.,
+            z: 0.,
         },
-        100.,
+        1000.,
     );
 
     world.push((
         Box::new(ground),
         Box::new(Lambertian {
             albedo: Color {
-                x: 0.8,
-                y: 0.8,
-                z: 0.0,
+                x: 0.5,
+                y: 0.5,
+                z: 0.5,
             },
         }),
     ));
 
-    let camera: Camera = Camera::new(
-        Vec3 {
-            x: -2.,
-            y: 2.,
-            z: 1.,
+    let mut rng = rand::thread_rng();
+    for i in -11..11 {
+        for j in -11..11 {
+            let mat = rng.gen_range(0. ..1.);
+            let center = Point3 {
+                x: (i as f32) + 0.9 * rng.gen_range(0. ..1.),
+                y: 0.2,
+                z: (j as f32) + 0.9 * rng.gen_range(0. ..1.),
+            };
+
+            if (center
+                - Point3 {
+                    x: 4.,
+                    y: 0.2,
+                    z: 0.,
+                })
+            .length()
+                > 0.9
+            {
+                if mat < 0.8 {
+                    let object = Sphere::new(center, 0.2);
+
+                    world.push((
+                        Box::new(object),
+                        Box::new(Lambertian {
+                            albedo: Color::random() * Color::random(),
+                        }),
+                    ));
+                } else if mat < 0.95 {
+                    let object = Sphere::new(center, 0.2);
+
+                    world.push((
+                        Box::new(object),
+                        Box::new(Metal {
+                            albedo: Color::random() * Color::random(),
+                            fuzz: rng.gen_range(0. ..0.5),
+                        }),
+                    ));
+                } else {
+                    let object = Sphere::new(center, 0.2);
+                    world.push((Box::new(object), Box::new(Dialectric { ir: 1.5 })));
+                }
+            }
+        }
+    }
+
+    let one = Sphere::new(
+        Point3 {
+            x: -4.,
+            y: 1.,
+            z: 0.,
         },
-        Vec3 {
+        1.,
+    );
+
+    world.push((
+        Box::new(one),
+        Box::new(Lambertian {
+            albedo: Color {
+                x: 0.4,
+                y: 0.2,
+                z: 0.1,
+            },
+        }),
+    ));
+
+    let two = Sphere::new(
+        Point3 {
             x: 0.,
-            y: 0.,
-            z: -1.,
+            y: 1.,
+            z: 0.,
         },
+        1.,
+    );
+    world.push((Box::new(two), Box::new(Dialectric { ir: 1.5 })));
+
+    let three = Sphere::new(
+        Point3 {
+            x: 4.,
+            y: 1.,
+            z: 0.,
+        },
+        1.,
+    );
+
+    world.push((
+        Box::new(three),
+        Box::new(Metal {
+            albedo: Color {
+                x: 0.7,
+                y: 0.6,
+                z: 0.5,
+            },
+            fuzz: 0.,
+        }),
+    ));
+
+    let lookfrom = Vec3 {
+        x: 13.,
+        y: 2.,
+        z: 3.,
+    };
+
+    let lookat = Vec3 {
+        x: 0.,
+        y: 0.,
+        z: 0.,
+    };
+    let camera: Camera = Camera::new(
+        lookfrom,
+        lookat,
         Vec3 {
             x: 0.,
             y: 1.,
@@ -135,6 +174,8 @@ fn main() {
         },
         20.,
         aspect_ratio,
+        0.1,
+        10.,
     );
 
     println!("P3 {} {} {:?}", img.width(), img.height(), camera);
