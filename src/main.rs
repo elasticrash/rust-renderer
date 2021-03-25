@@ -14,6 +14,10 @@ use crate::vec3::ToColor;
 use crate::vec3::Vec3;
 use crate::vec3::Vec3Attributes;
 use rand::prelude::*;
+use std::sync::mpsc;
+use std::sync::{Arc, Mutex};
+use std::thread;
+extern crate num_cpus;
 
 use image::{imageops, ImageBuffer, RgbImage};
 mod camera;
@@ -29,12 +33,19 @@ fn main() {
     let image_width = 1200;
     let image_height = (image_width as f32 / aspect_ratio) as u32;
     let mut img: RgbImage = ImageBuffer::new(image_width, image_height);
-    let samples_per_pixel = 50;
+    let samples_per_pixel = 1;
     let depth: i32 = 50;
 
+    println!("using {} threads", num_cpus::get());
+
     //World
-    let mut world: Vec<(Box<dyn Hittable>, Box<dyn Material>)> =
-        Vec::<(Box<dyn Hittable>, Box<dyn Material>)>::new();
+    let mut world: Vec<(
+        Arc<dyn Hittable + Sync + Send>,
+        Arc<dyn Material + Sync + Send>,
+    )> = Vec::<(
+        Arc<dyn Hittable + Sync + Send>,
+        Arc<dyn Material + Sync + Send>,
+    )>::new();
 
     let ground = Sphere::new(
         Point3 {
@@ -46,8 +57,8 @@ fn main() {
     );
 
     world.push((
-        Box::new(ground),
-        Box::new(Lambertian {
+        Arc::new(ground),
+        Arc::new(Lambertian {
             albedo: Color {
                 x: 0.5,
                 y: 0.5,
@@ -57,8 +68,8 @@ fn main() {
     ));
 
     let mut rng = rand::thread_rng();
-    for i in -11..11 {
-        for j in -11..11 {
+    for i in -5..5 {
+        for j in -5..5 {
             let mat = rng.gen_range(0. ..1.);
             let center = Point3 {
                 x: (i as f32) + 0.9 * rng.gen_range(0. ..1.),
@@ -79,8 +90,8 @@ fn main() {
                     let object = Sphere::new(center, 0.2);
 
                     world.push((
-                        Box::new(object),
-                        Box::new(Lambertian {
+                        Arc::new(object),
+                        Arc::new(Lambertian {
                             albedo: Color::random() * Color::random(),
                         }),
                     ));
@@ -88,15 +99,15 @@ fn main() {
                     let object = Sphere::new(center, 0.2);
 
                     world.push((
-                        Box::new(object),
-                        Box::new(Metal {
+                        Arc::new(object),
+                        Arc::new(Metal {
                             albedo: Color::random() * Color::random(),
                             fuzz: rng.gen_range(0. ..0.5),
                         }),
                     ));
                 } else {
                     let object = Sphere::new(center, 0.2);
-                    world.push((Box::new(object), Box::new(Dialectric { ir: 1.5 })));
+                    world.push((Arc::new(object), Arc::new(Dialectric { ir: 1.5 })));
                 }
             }
         }
@@ -112,8 +123,8 @@ fn main() {
     );
 
     world.push((
-        Box::new(one),
-        Box::new(Lambertian {
+        Arc::new(one),
+        Arc::new(Lambertian {
             albedo: Color {
                 x: 0.4,
                 y: 0.2,
@@ -130,7 +141,7 @@ fn main() {
         },
         1.,
     );
-    world.push((Box::new(two), Box::new(Dialectric { ir: 1.5 })));
+    world.push((Arc::new(two), Arc::new(Dialectric { ir: 1.5 })));
 
     let three = Sphere::new(
         Point3 {
@@ -142,8 +153,8 @@ fn main() {
     );
 
     world.push((
-        Box::new(three),
-        Box::new(Metal {
+        Arc::new(three),
+        Arc::new(Metal {
             albedo: Color {
                 x: 0.7,
                 y: 0.6,
@@ -179,43 +190,86 @@ fn main() {
     );
 
     println!("P3 {} {} {:?}", img.width(), img.height(), camera);
-    let mut rng = rand::thread_rng();
+    let mut fake_image: Vec<Pixel> = vec![];
+
+    let safe_world = Arc::new(Mutex::new(world.clone()));
+    let mut handles = vec![];
+    let (tx, rx) = mpsc::channel();
 
     for j in 0..image_height {
-        if j % 50 == 0 {
+        if j % 10 == 0 {
             println!("{}", j);
         }
         for i in 0..image_width {
-            let pixel = img.get_pixel_mut(i, j);
+            let safe = Arc::clone(&safe_world);
+            let tx1 = mpsc::Sender::clone(&tx);
 
-            let mut pixel_color = Color {
-                x: 0.,
-                y: 0.,
-                z: 0.,
-            };
-            for _s in 0..samples_per_pixel {
-                let u = (i as f32 + rng.gen_range(0. ..1.)) / (image_width - 1) as f32;
-                let v = (j as f32 + rng.gen_range(0. ..1.)) / (image_height - 1) as f32;
-                let r = &camera.get_ray(u, v);
-                let t_world = world.clone();
-                pixel_color += ray_color(*r, t_world, depth);
+            let handle = thread::spawn(move || {
+                let mut rng = rand::thread_rng();
+
+                let mut pixel_color = Color {
+                    x: 0.,
+                    y: 0.,
+                    z: 0.,
+                };
+                for _s in 0..samples_per_pixel {
+                    let u = (i as f32 + rng.gen_range(0. ..1.)) / (image_width - 1) as f32;
+                    let v = (j as f32 + rng.gen_range(0. ..1.)) / (image_height - 1) as f32;
+                    let r = &camera.get_ray(u, v);
+                    let tworld = safe.lock().unwrap();
+                    pixel_color += ray_color(*r, tworld.to_vec(), depth);
+                }
+
+                let pixel_value = pixel_color.to_color(vec![
+                    1. / samples_per_pixel as f32,
+                    1. / samples_per_pixel as f32,
+                    1. / samples_per_pixel as f32,
+                ]);
+
+                tx1.send(Arc::new(Pixel {
+                    x: i,
+                    y: j,
+                    r: pixel_value.r,
+                    g: pixel_value.g,
+                    b: pixel_value.b,
+                }))
+                .unwrap();
+            });
+
+            handles.push(handle);
+
+            if handles.len() == num_cpus::get() {
+                for h in handles {
+                    h.join().unwrap();
+                }
+                handles = vec![];
             }
-
-            let pixel_value = pixel_color.to_color(vec![
-                1. / samples_per_pixel as f32,
-                1. / samples_per_pixel as f32,
-                1. / samples_per_pixel as f32,
-            ]);
-            *pixel = image::Rgb([pixel_value.r, pixel_value.g, pixel_value.b]);
         }
     }
+
+    for i in rx {
+        fake_image.push(*i);
+        if fake_image.len() == (image_height * image_width) as usize {
+            break;
+        }
+    }
+
+    println!("saving image");
+    for p in &mut fake_image.clone() {
+        let pixel = img.get_pixel_mut(p.x, p.y);
+        *pixel = image::Rgb([p.r, p.g, p.b]);
+    }
+
     let subimg = imageops::flip_horizontal(&imageops::rotate180(&mut img));
     subimg.save("render.png").unwrap();
 }
 
 fn ray_color(
     ray: Ray,
-    world: Vec<(Box<(dyn Hittable + 'static)>, Box<(dyn Material + 'static)>)>,
+    world: Vec<(
+        Arc<(dyn Hittable + Sync + Send)>,
+        Arc<(dyn Material + Sync + Send)>,
+    )>,
     depth: i32,
 ) -> Color {
     let mut rec = &mut HitRecord {
@@ -257,7 +311,12 @@ fn ray_color(
             }
 }
 
-impl<'a> Hittable for Vec<(Box<dyn Hittable>, Box<dyn Material>)> {
+impl<'a> Hittable
+    for Vec<(
+        Arc<dyn Hittable + Sync + Send>,
+        Arc<dyn Material + Sync + Send>,
+    )>
+{
     fn hit(&self, r: &ray::Ray, min: f32, max: f32, rec_out: &mut HitRecord) -> bool {
         let mut hit_anything: bool = false;
         let mut closest_so_far = max;
@@ -298,4 +357,13 @@ fn random_in_unit_sphere() -> Vec3 {
 
 fn random_unit_vector() -> Vec3 {
     return random_in_unit_sphere().unit();
+}
+
+#[derive(Clone, Copy, Debug)]
+struct Pixel {
+    x: u32,
+    y: u32,
+    r: u8,
+    g: u8,
+    b: u8,
 }
