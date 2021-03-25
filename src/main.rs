@@ -33,7 +33,7 @@ fn main() {
     let image_width = 1200;
     let image_height = (image_width as f32 / aspect_ratio) as u32;
     let mut img: RgbImage = ImageBuffer::new(image_width, image_height);
-    let samples_per_pixel = 1;
+    let samples_per_pixel = 50;
     let depth: i32 = 50;
 
     println!("using {} threads", num_cpus::get());
@@ -68,8 +68,8 @@ fn main() {
     ));
 
     let mut rng = rand::thread_rng();
-    for i in -5..5 {
-        for j in -5..5 {
+    for i in -11..11 {
+        for j in -11..11 {
             let mat = rng.gen_range(0. ..1.);
             let center = Point3 {
                 x: (i as f32) + 0.9 * rng.gen_range(0. ..1.),
