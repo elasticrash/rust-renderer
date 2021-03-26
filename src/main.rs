@@ -15,7 +15,7 @@ use crate::vec3::Vec3;
 use crate::vec3::Vec3Attributes;
 use rand::prelude::*;
 use std::sync::mpsc;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc};
 use std::thread;
 extern crate num_cpus;
 
@@ -33,7 +33,7 @@ fn main() {
     let image_width = 1200;
     let image_height = (image_width as f32 / aspect_ratio) as u32;
     let mut img: RgbImage = ImageBuffer::new(image_width, image_height);
-    let samples_per_pixel = 50;
+    let samples_per_pixel = 10;
     let depth: i32 = 50;
 
     println!("using {} threads", num_cpus::get());
@@ -192,7 +192,7 @@ fn main() {
     println!("P3 {} {} {:?}", img.width(), img.height(), camera);
     let mut fake_image: Vec<Pixel> = vec![];
 
-    let safe_world = Arc::new(Mutex::new(world.clone()));
+    let safe_world = Arc::new(world.clone());
     let mut handles = vec![];
     let (tx, rx) = mpsc::channel();
 
@@ -216,8 +216,7 @@ fn main() {
                     let u = (i as f32 + rng.gen_range(0. ..1.)) / (image_width - 1) as f32;
                     let v = (j as f32 + rng.gen_range(0. ..1.)) / (image_height - 1) as f32;
                     let r = &camera.get_ray(u, v);
-                    let tworld = safe.lock().unwrap();
-                    pixel_color += ray_color(*r, tworld.to_vec(), depth);
+                    pixel_color += ray_color(*r, safe.to_vec(), depth);
                 }
 
                 let pixel_value = pixel_color.to_color(vec![
