@@ -30,10 +30,10 @@ mod vec3;
 fn main() {
     //Image
     let aspect_ratio = 3.0 / 2.0;
-    let image_width = 1200;
+    let image_width = 200;
     let image_height = (image_width as f32 / aspect_ratio) as u32;
     let mut img: RgbImage = ImageBuffer::new(image_width, image_height);
-    let samples_per_pixel = 50;
+    let samples_per_pixel = 10;
     let depth: i32 = 50;
 
     println!("using {} threads", num_cpus::get());
@@ -192,65 +192,63 @@ fn main() {
     println!("P3 {} {} {:?}", img.width(), img.height(), camera);
     let mut fake_image: Vec<Pixel> = vec![];
 
-    let safe_world = Arc::new(Mutex::new(world.clone()));
-    let mut handles = vec![];
-    let (tx, rx) = mpsc::channel();
+    let safe_world = Arc::new(world.clone());
 
     for j in 0..image_height {
         if j % 10 == 0 {
             println!("{}", j);
         }
         for i in 0..image_width {
-            let safe = Arc::clone(&safe_world);
-            let tx1 = mpsc::Sender::clone(&tx);
+            let mut pixel_color = Color {
+                x: 0.,
+                y: 0.,
+                z: 0.,
+            };
 
-            let handle = thread::spawn(move || {
-                let mut rng = rand::thread_rng();
+            let (tx_, rx_) = mpsc::channel();
+            let mut handles = vec![];
 
-                let mut pixel_color = Color {
-                    x: 0.,
-                    y: 0.,
-                    z: 0.,
-                };
-                for _s in 0..samples_per_pixel {
+            for _s in 0..samples_per_pixel {
+                let tx2 = mpsc::Sender::clone(&tx_);
+                let safer = Arc::clone(&safe_world);
+                let handler = thread::spawn(move || {
+                    let mut rng = rand::thread_rng();
                     let u = (i as f32 + rng.gen_range(0. ..1.)) / (image_width - 1) as f32;
                     let v = (j as f32 + rng.gen_range(0. ..1.)) / (image_height - 1) as f32;
                     let r = &camera.get_ray(u, v);
-                    let tworld = safe.lock().unwrap();
-                    pixel_color += ray_color(*r, tworld.to_vec(), depth);
+                    let rzy = ray_color(*r, safer.to_vec(), depth);
+                    tx2.send(Arc::new(rzy)).unwrap();
+                });
+                handles.push(handler);
+
+                if handles.len() == num_cpus::get() {
+                    for h in handles {
+                        h.join().unwrap();
+                    }
+                    handles = vec![];
                 }
-
-                let pixel_value = pixel_color.to_color(vec![
-                    1. / samples_per_pixel as f32,
-                    1. / samples_per_pixel as f32,
-                    1. / samples_per_pixel as f32,
-                ]);
-
-                tx1.send(Arc::new(Pixel {
-                    x: i,
-                    y: j,
-                    r: pixel_value.r,
-                    g: pixel_value.g,
-                    b: pixel_value.b,
-                }))
-                .unwrap();
-            });
-
-            handles.push(handle);
-
-            if handles.len() == num_cpus::get() {
-                for h in handles {
-                    h.join().unwrap();
-                }
-                handles = vec![];
             }
-        }
-    }
 
-    for i in rx {
-        fake_image.push(*i);
-        if fake_image.len() == (image_height * image_width) as usize {
-            break;
+            for (i, value) in rx_.iter().enumerate() {
+                pixel_color += *value;
+                if i == samples_per_pixel-1 as usize {
+                    break;
+                }
+            }
+
+            let pixel_value = pixel_color.to_color(vec![
+                1. / samples_per_pixel as f32,
+                1. / samples_per_pixel as f32,
+                1. / samples_per_pixel as f32,
+            ]);
+
+            fake_image.push(Pixel {
+                x: i,
+                y: j,
+                r: pixel_value.r,
+                g: pixel_value.g,
+                b: pixel_value.b,
+            });
         }
     }
 
