@@ -33,7 +33,7 @@ fn main() {
     let image_width = 1200;
     let image_height = (image_width as f32 / aspect_ratio) as u32;
     let mut img: RgbImage = ImageBuffer::new(image_width, image_height);
-    let samples_per_pixel = 10;
+    let samples_per_pixel = 500;
     let depth: i32 = 50;
 
     println!("using {} threads", num_cpus::get());
