@@ -47,6 +47,7 @@ impl Material for Dialectric {
         *scattered = Ray {
             origin: rec.p,
             direction: direction,
+            time: r_in.time
         };
 
         return true;

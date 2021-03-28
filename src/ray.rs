@@ -5,6 +5,7 @@ use crate::vec3::Vec3;
 pub struct Ray {
     pub origin: Point3,
     pub direction: Vec3,
+    pub time: f32
 }
 
 impl Ray {
@@ -12,6 +13,7 @@ impl Ray {
         Self {
             origin: Point3::new(0.),
             direction: Vec3::new(0.),
+            time: 0.
         }
     }
 }

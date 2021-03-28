@@ -13,7 +13,7 @@ pub struct Lambertian {
 impl Material for Lambertian {
     fn scatter(
         &self,
-        _r_in: &Ray,
+        r_in: &Ray,
         rec: &HitRecord,
         attenuation: &mut Color,
         scattered: &mut Ray,
@@ -27,6 +27,7 @@ impl Material for Lambertian {
         *scattered = Ray {
             origin: rec.p,
             direction: scatter_direction,
+            time: r_in.time
         };
 
         *attenuation = self.albedo;

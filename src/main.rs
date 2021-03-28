@@ -5,6 +5,7 @@ use crate::materials::dielectric::Dialectric;
 use crate::materials::lambertian::Lambertian;
 use crate::materials::material::Material;
 use crate::materials::metal::Metal;
+use crate::primitives::moving_sphere::MovingSphere;
 use crate::primitives::sphere::Sphere;
 use crate::ray::Ray;
 use crate::vec3::Color;
@@ -15,7 +16,7 @@ use crate::vec3::Vec3;
 use crate::vec3::Vec3Attributes;
 use rand::prelude::*;
 use std::sync::mpsc;
-use std::sync::{Arc};
+use std::sync::Arc;
 use std::thread;
 extern crate num_cpus;
 
@@ -30,10 +31,10 @@ mod vec3;
 fn main() {
     //Image
     let aspect_ratio = 3.0 / 2.0;
-    let image_width = 1200;
+    let image_width = 600;
     let image_height = (image_width as f32 / aspect_ratio) as u32;
     let mut img: RgbImage = ImageBuffer::new(image_width, image_height);
-    let samples_per_pixel = 500;
+    let samples_per_pixel = 50;
     let depth: i32 = 50;
 
     println!("using {} threads", num_cpus::get());
@@ -87,7 +88,14 @@ fn main() {
                 > 0.9
             {
                 if mat < 0.8 {
-                    let object = Sphere::new(center, 0.2);
+                    let center2 = center
+                        + Vec3 {
+                            x: 0.,
+                            y: rng.gen_range(0. ..0.5),
+                            z: 0.,
+                        };
+
+                    let object = MovingSphere::new(center, center2, 0., 1., 0.2);
 
                     world.push((
                         Arc::new(object),

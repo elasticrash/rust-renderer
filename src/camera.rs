@@ -1,6 +1,7 @@
 use crate::random_in_unit_sphere;
 use crate::ray::Ray;
 use crate::vec3::{Math, Point3, Vec3};
+use rand::prelude::*;
 
 #[derive(Copy, Clone, Debug)]
 pub struct Camera {
@@ -16,6 +17,8 @@ pub struct Camera {
     u: Vec3,
     v: Vec3,
     w: Vec3,
+    _time0: f32,
+    _time1: f32,
 }
 
 pub trait CameraProperties {
@@ -64,6 +67,8 @@ impl Camera {
             u: u,
             v: v,
             w: w,
+            _time0: 0.,
+            _time1: 0.,
         }
     }
 }
@@ -72,6 +77,8 @@ impl CameraProperties for Camera {
     fn get_ray(self, s: f32, t: f32) -> Ray {
         let rd = Vec3::new(self.lens_radius) * random_in_unit_sphere();
         let offset = self.u * Vec3::new(rd.x) + self.v * Vec3::new(rd.y);
+        let mut rng = rand::thread_rng();
+
         Ray {
             origin: self.origin + offset,
             direction: self.lower_left_corner
@@ -79,6 +86,7 @@ impl CameraProperties for Camera {
                 + Vec3::new(t) * self.vertical
                 - self.origin
                 - offset,
+            time: rng.gen_range(0. ..1.),
         }
     }
 }
